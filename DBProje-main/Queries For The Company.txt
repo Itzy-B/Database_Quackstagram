@@ -1,0 +1,185 @@
+1:
+SELECT u.username
+FROM User u
+JOIN Follow f ON u.user_id = f.followed_id
+GROUP BY u.user_id
+HAVING COUNT(f.follower_id) > X;
+
+2:
+SELECT u.username, COUNT(p.post_id) AS post_count
+FROM User u
+LEFT JOIN Post p ON u.user_id = p.user_id
+GROUP BY u.username;
+
+3:
+SELECT c.content, c.created_at, u.username AS commenter
+FROM Comment c
+JOIN Post p ON c.post_id = p.post_id
+JOIN User u ON c.user_id = u.user_id
+WHERE p.user_id = [particular_user_id];
+
+4:
+SELECT p.post_id, p.caption, COUNT(pl.like_id) AS like_count
+FROM Post p
+JOIN PostLike pl ON p.post_id = pl.post_id
+GROUP BY p.post_id
+ORDER BY like_count DESC
+LIMIT X;
+
+5:
+SELECT u.username, COUNT(pl.like_id) AS liked_count
+FROM User u
+JOIN PostLike pl ON u.user_id = pl.user_id
+GROUP BY u.username;
+
+6:
+SELECT u.username
+FROM User u
+LEFT JOIN Post p ON u.user_id = p.user_id
+WHERE p.post_id IS NULL;
+
+7:
+SELECT u1.username AS user1, u2.username AS user2
+FROM Follow f1
+JOIN Follow f2 ON f1.follower_id = f2.followed_id AND f1.followed_id = f2.follower_id
+JOIN User u1 ON f1.follower_id = u1.user_id
+JOIN User u2 ON f1.followed_id = u2.user_id
+WHERE f1.follower_id < f1.followed_id;
+
+8:
+SELECT u.username, COUNT(p.post_id) AS post_count
+FROM User u
+JOIN Post p ON u.user_id = p.user_id
+GROUP BY u.username
+ORDER BY post_count DESC
+LIMIT 1;
+
+9:
+SELECT u.username, COUNT(f.follower_id) AS follower_count
+FROM User u
+JOIN Follow f ON u.user_id = f.followed_id
+GROUP BY u.username
+ORDER BY follower_count DESC
+LIMIT X;
+
+10:
+SELECT p.post_id, p.caption
+FROM Post p
+JOIN PostLike pl ON p.post_id = pl.post_id
+GROUP BY p.post_id
+HAVING COUNT(pl.user_id) = (SELECT COUNT(*) FROM User);
+
+11:
+SELECT u.username, (COUNT(DISTINCT p.post_id) + COUNT(DISTINCT c.comment_id) + COUNT(DISTINCT pl.like_id)) AS activity_score
+FROM User u
+LEFT JOIN Post p ON u.user_id = p.user_id
+LEFT JOIN Comment c ON u.user_id = c.user_id
+LEFT JOIN PostLike pl ON u.user_id = pl.user_id
+GROUP BY u.username
+ORDER BY activity_score DESC
+LIMIT 1;
+
+12:
+SELECT u.username, AVG(like_count) AS avg_likes_per_post
+FROM (
+    SELECT p.user_id, COUNT(pl.like_id) AS like_count
+    FROM Post p
+    LEFT JOIN PostLike pl ON p.post_id = pl.post_id
+    GROUP BY p.post_id
+) AS likes_per_post
+JOIN User u ON likes_per_post.user_id = u.user_id
+GROUP BY u.username;
+
+13:
+SELECT p.post_id, p.caption
+FROM Post p
+LEFT JOIN Comment c ON p.post_id = c.post_id
+LEFT JOIN PostLike pl ON p.post_id = pl.post_id
+GROUP BY p.post_id, p.caption
+HAVING COUNT(c.comment_id) > COUNT(pl.like_id);
+
+14:
+SELECT u.username
+FROM User u
+WHERE NOT EXISTS (
+    SELECT p.post_id
+    FROM Post p
+    WHERE p.user_id = [specific_user_id] AND NOT EXISTS (
+        SELECT pl.like_id
+        FROM PostLike pl
+        WHERE pl.post_id = p.post_id AND pl.user_id = u.user_id
+    )
+);
+
+15:
+SELECT u.username, p.post_id, p.caption, COUNT(pl.like_id) AS like_count
+FROM User u
+JOIN Post p ON u.user_id = p.user_id
+JOIN PostLike pl ON p.post_id = pl.post_id
+GROUP BY u.username, p.post_id
+HAVING like_count = (
+    SELECT MAX(like_count)
+    FROM (
+        SELECT COUNT(pl2.like_id) AS like_count
+        FROM Post p2
+        JOIN PostLike pl2 ON p2.post_id = pl2.post_id
+        WHERE p2.user_id = u.user_id
+        GROUP BY p2.post_id
+    ) AS subquery
+);
+
+16:
+SELECT u.username, (follower_count / following_count) AS ratio
+FROM (
+    SELECT u.user_id, u.username, 
+           (SELECT COUNT(*) FROM Follow f WHERE f.followed_id = u.user_id) AS follower_count,
+           (SELECT COUNT(*) FROM Follow f WHERE f.follower_id = u.user_id) AS following_count
+    FROM User u
+) AS user_ratios
+ORDER BY ratio DESC
+LIMIT 1;
+
+17:
+SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS post_count
+FROM Post
+GROUP BY month
+ORDER BY post_count DESC
+LIMIT 1;
+
+18:
+SELECT u.username
+FROM User u
+WHERE u.user_id NOT IN (
+    SELECT DISTINCT pl.user_id
+    FROM Post p
+    JOIN PostLike pl ON p.post_id = pl.post_id
+    WHERE p.user_id = [specific_user_id]
+    UNION
+    SELECT DISTINCT c.user_id
+    FROM Post p
+    JOIN Comment c ON p.post_id = c.post_id
+    WHERE p.user_id = [specific_user_id]
+);
+
+19:
+SELECT u.username, (recent_followers - past_followers) AS follower_increase
+FROM User u
+JOIN (
+    SELECT followed_id, 
+           COUNT(CASE WHEN created_at > (CURRENT_DATE - INTERVAL X DAY) THEN 1 END) AS recent_followers,
+           COUNT(CASE WHEN created_at <= (CURRENT_DATE - INTERVAL X DAY) THEN 1 END) AS past_followers
+    FROM Follow
+    GROUP BY followed_id
+) AS follower_counts ON u.user_id = follower_counts.followed_id
+ORDER BY follower_increase DESC
+LIMIT 1;
+
+20:
+SELECT u.username, (follower_count / total_users) * 100 AS percentage
+FROM (
+    SELECT u.user_id, u.username, COUNT(f.follower_id) AS follower_count, (SELECT COUNT(*) FROM User) AS total_users
+    FROM User u
+    JOIN Follow f ON u.user_id = f.followed_id
+    GROUP BY u.user_id
+) AS user_followers
+WHERE (follower_count / total_users) * 100 > X;
